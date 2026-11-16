@@ -1,0 +1,549 @@
+// Escrow platform database schema.
+// Monetary amounts are stored as BigInt minor units (never floats).
+// Balances are DERIVED from ledger postings — there is no mutable balance column.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --------------------------------------------------------------------------
+// Identity, auth, access control
+// --------------------------------------------------------------------------
+
+model User {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  emailVerified  Boolean   @default(false)
+  passwordHash   String
+  displayName    String
+  status         UserStatus @default(ACTIVE)
+  mfaEnabled     Boolean   @default(false)
+  mfaSecret      String?   // encrypted at rest; null until enrolled
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deactivatedAt  DateTime?
+
+  profile            Profile?
+  roles              UserRole[]
+  sessions           Session[]
+  verifications      IdentityVerification[]
+  agreementsAsBuyer  EscrowAgreement[] @relation("BuyerAgreements")
+  agreementsAsSeller EscrowAgreement[] @relation("SellerAgreements")
+  acceptances        AgreementAcceptance[]
+  notifications      Notification[]
+  auditLogs          AuditLog[]        @relation("ActorAudit")
+  disputeMessages    DisputeMessage[]
+  txMessages         TransactionMessage[]
+
+  @@index([status])
+}
+
+enum UserStatus {
+  ACTIVE
+  RESTRICTED
+  DEACTIVATED
+}
+
+model Profile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  legalName   String?
+  phone       String?
+  country     String?
+  avatarKey   String?  // object-storage key, not a public URL
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Role {
+  id          String     @id @default(uuid())
+  name        String     @unique // maps to @escrow/core Role
+  description String?
+  users       UserRole[]
+}
+
+model UserRole {
+  userId    String
+  roleId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  grantedAt DateTime @default(now())
+
+  @@id([userId, roleId])
+}
+
+model Session {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String   @unique
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime @default(now())
+
+  @@index([userId])
+}
+
+// --------------------------------------------------------------------------
+// KYC / identity verification
+// --------------------------------------------------------------------------
+
+model IdentityVerification {
+  id           String             @id @default(uuid())
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     String             // "none" until a provider is configured
+  providerRef  String?
+  level        VerificationLevel  @default(NONE)
+  status       VerificationStatus @default(UNVERIFIED)
+  reason       String?
+  submittedAt  DateTime?
+  reviewedAt   DateTime?
+  expiresAt    DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([userId, status])
+}
+
+enum VerificationLevel {
+  NONE
+  BASIC
+  ENHANCED
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  IN_REVIEW
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+// --------------------------------------------------------------------------
+// Escrow agreements and versioned terms
+// --------------------------------------------------------------------------
+
+model EscrowAgreement {
+  id             String   @id @default(uuid())
+  // Public, non-guessable reference shown to users.
+  reference      String   @unique
+  title          String
+  description    String
+  category       String
+  buyerId        String
+  sellerId       String
+  buyer          User     @relation("BuyerAgreements", fields: [buyerId], references: [id])
+  seller         User     @relation("SellerAgreements", fields: [sellerId], references: [id])
+
+  amountMinor    BigInt
+  currency       String
+  feePayer       String   // BUYER | SELLER | SPLIT
+  feePercentBps  Int
+  feeFixedMinor  BigInt
+
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  currentVersionId String? @unique
+  currentVersion   AgreementVersion? @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  versions         AgreementVersion[] @relation("AgreementVersions")
+  transaction      Transaction?
+
+  @@index([buyerId])
+  @@index([sellerId])
+}
+
+// Immutable snapshot of accepted terms. A material change creates a new version
+// and requires renewed acceptance from both parties.
+model AgreementVersion {
+  id                String   @id @default(uuid())
+  agreementId       String
+  agreement         EscrowAgreement @relation("AgreementVersions", fields: [agreementId], references: [id], onDelete: Cascade)
+  versionNumber     Int
+  // Full terms snapshot as JSON; content hash makes tampering detectable.
+  termsJson         Json
+  termsHash         String
+  deliveryDeadline  DateTime?
+  inspectionPeriodH Int      // inspection window in hours
+  releaseConditions String?
+  refundConditions  String?
+  disputeRules      String?
+  createdAt         DateTime @default(now())
+
+  currentFor  EscrowAgreement? @relation("CurrentVersion")
+  acceptances AgreementAcceptance[]
+
+  @@unique([agreementId, versionNumber])
+}
+
+model AgreementAcceptance {
+  id         String   @id @default(uuid())
+  versionId  String
+  version    AgreementVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  role       String   // BUYER | SELLER
+  ipAddress  String?
+  acceptedAt DateTime @default(now())
+
+  @@unique([versionId, userId])
+}
+
+// --------------------------------------------------------------------------
+// Transactions + state history
+// --------------------------------------------------------------------------
+
+model Transaction {
+  id          String   @id @default(uuid())
+  reference   String   @unique
+  agreementId String   @unique
+  agreement   EscrowAgreement @relation(fields: [agreementId], references: [id])
+  state       String   @default("DRAFT") // @escrow/core TransactionState
+  // Optimistic-concurrency guard against racing transitions.
+  version     Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stateHistory  TransactionStateChange[]
+  paymentIntents PaymentIntent[]
+  payouts       Payout[]
+  refunds       Refund[]
+  deliveries    Delivery[]
+  disputes      Dispute[]
+  messages      TransactionMessage[]
+  journalEntries JournalEntry[]
+
+  @@index([state])
+}
+
+model TransactionStateChange {
+  id            String   @id @default(uuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  fromState     String?
+  toState       String
+  actorId       String?  // null when system/provider-driven
+  systemDriven  Boolean  @default(false)
+  reason        String?
+  createdAt     DateTime @default(now())
+
+  @@index([transactionId, createdAt])
+}
+
+// --------------------------------------------------------------------------
+// Payments, payouts, refunds, provider events
+// --------------------------------------------------------------------------
+
+model PaymentIntent {
+  id            String   @id @default(uuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  provider      String
+  providerRef   String?  @unique
+  amountMinor   BigInt
+  currency      String
+  status        PaymentStatus @default(REQUIRES_PAYMENT)
+  idempotencyKey String  @unique
+  clientSecret  String?  // transient; never logged
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([transactionId, status])
+}
+
+enum PaymentStatus {
+  REQUIRES_PAYMENT
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+model Payout {
+  id            String   @id @default(uuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  provider      String
+  providerRef   String?  @unique
+  amountMinor   BigInt
+  currency      String
+  status        PayoutStatus @default(PENDING)
+  idempotencyKey String  @unique
+  approvedById  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+enum PayoutStatus {
+  PENDING
+  APPROVED
+  PROCESSING
+  PAID
+  FAILED
+}
+
+model Refund {
+  id            String   @id @default(uuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  provider      String
+  providerRef   String?  @unique
+  amountMinor   BigInt
+  currency      String
+  status        RefundStatus @default(PENDING)
+  idempotencyKey String  @unique
+  approvedById  String?
+  reason        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+enum RefundStatus {
+  PENDING
+  APPROVED
+  PROCESSING
+  REFUNDED
+  FAILED
+}
+
+// Raw provider webhook/callback events. Verified (signature-checked) and
+// processed exactly once via (provider, eventId) uniqueness.
+model ProviderEvent {
+  id            String   @id @default(uuid())
+  provider      String
+  eventId       String
+  eventType     String
+  signatureOk   Boolean  @default(false)
+  processedAt   DateTime?
+  payloadJson   Json
+  createdAt     DateTime @default(now())
+
+  @@unique([provider, eventId])
+}
+
+model ReconciliationRecord {
+  id            String   @id @default(uuid())
+  provider      String
+  periodStart   DateTime
+  periodEnd     DateTime
+  expectedMinor BigInt
+  observedMinor BigInt
+  currency      String
+  discrepancies Json?
+  createdAt     DateTime @default(now())
+}
+
+// --------------------------------------------------------------------------
+// Double-entry ledger (balances derived, journal entries immutable)
+// --------------------------------------------------------------------------
+
+model LedgerAccount {
+  id        String   @id @default(uuid())
+  // e.g. "escrow:liability:<txId>", "platform:revenue", "provider:clearing"
+  code      String   @unique
+  type      String   // ASSET | LIABILITY | EQUITY | REVENUE | EXPENSE
+  currency  String
+  createdAt DateTime @default(now())
+
+  postings  LedgerPosting[]
+}
+
+model JournalEntry {
+  id            String   @id @default(uuid())
+  reference     String
+  idempotencyKey String  @unique
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+  createdAt     DateTime @default(now())
+
+  postings LedgerPosting[]
+}
+
+model LedgerPosting {
+  id        String   @id @default(uuid())
+  entryId   String
+  entry     JournalEntry  @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId String
+  account   LedgerAccount @relation(fields: [accountId], references: [id])
+  direction String        // DEBIT | CREDIT
+  amountMinor BigInt      // always positive
+  currency  String
+  createdAt DateTime @default(now())
+
+  @@index([accountId])
+  @@index([entryId])
+}
+
+// --------------------------------------------------------------------------
+// Delivery + evidence
+// --------------------------------------------------------------------------
+
+model Delivery {
+  id            String   @id @default(uuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  submittedById String
+  trackingRef   String?
+  note          String?
+  status        DeliveryStatus @default(SUBMITTED)
+  inspectionDueAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  evidence Evidence[]
+}
+
+enum DeliveryStatus {
+  SUBMITTED
+  ACCEPTED
+  REJECTED
+}
+
+model Evidence {
+  id          String   @id @default(uuid())
+  deliveryId  String?
+  delivery    Delivery? @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  disputeId   String?
+  dispute     Dispute?  @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  storageKey  String   // object-storage key; access is authorized per-request
+  fileName    String
+  contentType String
+  sizeBytes   Int
+  scanStatus  ScanStatus @default(PENDING)
+  uploadedById String
+  createdAt   DateTime @default(now())
+}
+
+enum ScanStatus {
+  PENDING
+  CLEAN
+  INFECTED
+  FAILED
+}
+
+// --------------------------------------------------------------------------
+// Disputes
+// --------------------------------------------------------------------------
+
+model Dispute {
+  id            String   @id @default(uuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  openedById    String
+  reason        String
+  status        DisputeStatus @default(OPEN)
+  responseDueAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  messages DisputeMessage[]
+  evidence Evidence[]
+  decision DisputeDecision?
+}
+
+enum DisputeStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  APPEALED
+  CLOSED
+}
+
+model DisputeMessage {
+  id         String   @id @default(uuid())
+  disputeId  String
+  dispute    Dispute  @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User     @relation(fields: [authorId], references: [id])
+  body       String
+  createdAt  DateTime @default(now())
+
+  @@index([disputeId, createdAt])
+}
+
+model DisputeDecision {
+  id            String   @id @default(uuid())
+  disputeId     String   @unique
+  dispute       Dispute  @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  decidedById   String
+  outcome       DisputeOutcome
+  buyerRefundMinor BigInt @default(0)
+  sellerPayoutMinor BigInt @default(0)
+  rationale     String
+  createdAt     DateTime @default(now())
+}
+
+enum DisputeOutcome {
+  FULL_BUYER_REFUND
+  FULL_SELLER_PAYOUT
+  PARTIAL
+  RETURN_BEFORE_REFUND
+  ESCALATED
+}
+
+// --------------------------------------------------------------------------
+// Transaction messaging
+// --------------------------------------------------------------------------
+
+model TransactionMessage {
+  id            String   @id @default(uuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  authorId      String
+  author        User     @relation(fields: [authorId], references: [id])
+  body          String
+  createdAt     DateTime @default(now())
+
+  @@index([transactionId, createdAt])
+}
+
+// --------------------------------------------------------------------------
+// Notifications
+// --------------------------------------------------------------------------
+
+model Notification {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       String
+  title      String
+  body       String
+  dataJson   Json?
+  readAt     DateTime?
+  // Deduplication key so the same event never notifies twice.
+  dedupeKey  String?
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, readAt])
+}
+
+// --------------------------------------------------------------------------
+// Audit log (append-only)
+// --------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  actor      User?    @relation("ActorAudit", fields: [actorId], references: [id])
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+}

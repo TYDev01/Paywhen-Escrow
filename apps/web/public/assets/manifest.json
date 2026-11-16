@@ -1,0 +1,5 @@
+{
+  "$comment": "Add images the owner supplies here. The hero carousel reads `hero` at runtime, so new images appear without a rebuild. Example slide: { \"src\": \"/assets/hero-1.jpg\", \"alt\": \"Describe the image\", \"title\": \"Optional overlay title\", \"subtitle\": \"Optional overlay subtitle\" }. While `hero` is empty, designed placeholder slides render.",
+  "hero": [],
+  "images": []
+}

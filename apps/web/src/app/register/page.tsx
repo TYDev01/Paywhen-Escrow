@@ -10,7 +10,7 @@ import { register as registerUser } from "@/lib/auth-store";
 import { ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input, Field } from "@/components/ui/input";
-import { Container } from "@/components/ui/container";
+import { AuthShell } from "@/components/auth/auth-shell";
 
 const schema = z.object({
   displayName: z.string().min(2, "Enter your name"),
@@ -41,47 +41,34 @@ export default function RegisterPage() {
   };
 
   return (
-    <main className="grid min-h-screen place-items-center py-16">
-      <Container className="max-w-md">
-        <Link href="/" className="mb-8 inline-flex items-center gap-2 font-display text-lg font-bold">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-fg">E</span>
-          Escrow
-        </Link>
-        <div className="rounded-2xl border border-border bg-surface p-7 shadow-subtle">
-          <h1 className="font-display text-2xl font-bold">Create your account</h1>
-          <p className="mt-1 text-sm text-fg-muted">
-            Start creating secure escrow transactions.
-          </p>
-
-          {serverError && (
-            <div role="alert" className="mt-4 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-              {serverError}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4" noValidate>
-            <Field label="Full name" htmlFor="displayName" error={errors.displayName?.message}>
-              <Input id="displayName" autoComplete="name" {...register("displayName")} />
-            </Field>
-            <Field label="Email" htmlFor="email" error={errors.email?.message}>
-              <Input id="email" type="email" autoComplete="email" {...register("email")} />
-            </Field>
-            <Field label="Password" htmlFor="password" error={errors.password?.message}>
-              <Input id="password" type="password" autoComplete="new-password" {...register("password")} />
-            </Field>
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? "Creating account…" : "Create account"}
-            </Button>
-          </form>
-
-          <p className="mt-5 text-center text-sm text-fg-muted">
-            Already have an account?{" "}
-            <Link href="/login" className="font-medium text-primary hover:underline">
-              Log in
-            </Link>
-          </p>
+    <AuthShell title="Create your account" description="Create escrow agreements and manage them in one place.">
+      {serverError && (
+        <div role="alert" className="mt-4 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+          {serverError}
         </div>
-      </Container>
-    </main>
+      )}
+
+      <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5" noValidate>
+        <Field label="Full name" htmlFor="displayName" error={errors.displayName?.message}>
+          <Input id="displayName" autoComplete="name" {...register("displayName")} />
+        </Field>
+        <Field label="Email" htmlFor="email" error={errors.email?.message}>
+          <Input id="email" type="email" autoComplete="email" {...register("email")} />
+        </Field>
+        <Field label="Password" htmlFor="password" error={errors.password?.message}>
+          <Input id="password" type="password" autoComplete="new-password" {...register("password")} />
+        </Field>
+        <Button type="submit" className="h-12 w-full rounded-md" disabled={isSubmitting}>
+          {isSubmitting ? "Creating account…" : "Create account"}
+        </Button>
+      </form>
+
+      <p className="mt-5 text-sm text-fg-muted">
+        Already have an account?{" "}
+        <Link href="/login" className="font-medium text-primary hover:underline">
+          Log in
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

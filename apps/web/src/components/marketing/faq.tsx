@@ -28,37 +28,31 @@ const faqs = [
 
 export function Faq() {
   return (
-    <section id="faq" className="py-20">
-      <Container className="max-w-3xl">
-        <div className="text-center">
-          <h2 className="font-display text-3xl font-bold sm:text-4xl">
-            Frequently asked questions
-          </h2>
-          <p className="mt-4 text-fg-muted">
-            Everything you need to know before your first transaction.
-          </p>
-        </div>
+    <section id="faq" aria-labelledby="faq-title" className="editorial-faq scroll-mt-4">
+      <Container className="grid gap-8 md:grid-cols-[0.8fr_1.2fr] md:gap-12">
+        <h2 id="faq-title" className="editorial-title max-w-[12ch] !text-[clamp(2.5rem,5.7vw,5.5rem)]">
+          Frequently asked questions
+        </h2>
 
-        <Accordion.Root type="single" collapsible className="mt-10 space-y-3">
+        <Accordion.Root type="single" collapsible className="divide-y divide-border border-y border-border">
           {faqs.map((item, i) => (
             <Accordion.Item
               key={i}
               value={`item-${i}`}
-              className="overflow-hidden rounded-lg border border-border bg-surface"
             >
               <Accordion.Header>
-                <Accordion.Trigger className="group flex w-full items-center justify-between gap-4 px-5 py-4 text-left text-sm font-medium hover:bg-surface-muted">
+                <Accordion.Trigger className="group flex w-full items-center justify-between gap-4 px-1 py-4 text-left font-semibold hover:text-primary">
                   {item.q}
                   <span
                     aria-hidden
-                    className="shrink-0 text-fg-muted transition-transform duration-200 group-data-[state=open]:rotate-45"
+                    className="grid size-9 shrink-0 place-items-center rounded-md border border-border text-xl text-primary transition-transform duration-200 group-data-[state=open]:rotate-45"
                   >
                     +
                   </span>
                 </Accordion.Trigger>
               </Accordion.Header>
               <Accordion.Content className="overflow-hidden data-[state=closed]:animate-none">
-                <p className="px-5 pb-5 text-sm text-fg-muted">{item.a}</p>
+                <p className="max-w-[65ch] px-1 pb-5 pr-8 text-base leading-relaxed text-fg-muted">{item.a}</p>
               </Accordion.Content>
             </Accordion.Item>
           ))}

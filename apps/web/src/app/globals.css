@@ -7,15 +7,15 @@
    Colours are RGB triplets so Tailwind's <alpha-value> works.
 --------------------------------------------------------------------------- */
 :root {
-  --bg: 245 243 255;         /* Soft Lavender */
+  --bg: 247 246 252;         /* Soft Lavender */
   --surface: 255 255 255;    /* White */
-  --surface-muted: 249 250 251;
-  --border: 229 231 235;
-  --fg: 17 24 39;            /* Deep Charcoal */
-  --fg-muted: 75 85 99;
-  --primary: 79 70 229;      /* Electric Indigo */
+  --surface-muted: 239 237 249;
+  --border: 214 211 228;
+  --fg: 18 16 32;            /* Deep Charcoal */
+  --fg-muted: 78 74 96;
+  --primary: 66 47 212;      /* Electric Indigo */
   --primary-fg: 255 255 255;
-  --accent: 163 255 203;     /* Fresh Mint */
+  --accent: 175 255 207;     /* Fresh Mint */
   --success: 22 163 74;
   --warning: 202 138 4;
   --danger: 220 38 38;

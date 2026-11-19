@@ -66,8 +66,8 @@ export default function NewEscrowPage() {
       <Link href="/dashboard" className="text-sm text-fg-muted hover:text-fg">
         ← Back to dashboard
       </Link>
-      <h1 className="mt-4 font-display text-3xl font-bold">Create an escrow agreement</h1>
-      <p className="mt-2 text-sm text-fg-muted">
+      <h1 className="editorial-title mt-5 !text-[clamp(2.25rem,5vw,4.5rem)]">Create an escrow agreement</h1>
+      <p className="mt-4 text-base leading-relaxed text-fg-muted">
         Both you and the counterparty must accept the terms before anything progresses to
         funding. The exact fee is calculated and recorded on the agreement.
       </p>
@@ -78,7 +78,7 @@ export default function NewEscrowPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-5" noValidate>
+      <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5 border-t border-border pt-6" noValidate>
         <Field label="Title" htmlFor="title" error={errors.title?.message}>
           <Input id="title" {...register("title")} />
         </Field>

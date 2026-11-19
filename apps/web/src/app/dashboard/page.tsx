@@ -7,6 +7,7 @@ import { authedFetch, getAccessToken, logout } from "@/lib/auth-store";
 import { getPaymentCapabilities, type PaymentCapabilities } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
+import { Brand } from "@/components/ui/brand";
 import { StateBadge } from "@/components/dashboard/state-badge";
 
 interface Me {
@@ -84,12 +85,9 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-border bg-surface">
+      <header className="border-b border-primary/15 bg-bg">
         <Container className="flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 font-display font-bold">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-fg">E</span>
-            Escrow
-          </Link>
+          <Brand />
           <div className="flex items-center gap-3">
             <span className="hidden text-sm text-fg-muted sm:inline">{me?.email}</span>
             <Button
@@ -106,79 +104,81 @@ export default function DashboardPage() {
         </Container>
       </header>
 
-      <Container className="py-10">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="font-display text-3xl font-bold">
-              Welcome{me ? `, ${me.displayName}` : ""}
-            </h1>
-            <p className="mt-1 text-sm text-fg-muted">
-              Identity verification:{" "}
-              <span className="font-medium text-fg">{me?.verification ?? "UNVERIFIED"}</span>
-            </p>
+      <main id="main">
+        <Container className="py-10">
+          <div className="flex flex-wrap items-end justify-between gap-5 border-b border-border pb-8 sm:pb-10">
+            <div className="min-w-0">
+              <p className="section-label">Workspace</p>
+              <h1 className="editorial-title mt-2 break-words !text-[clamp(2.5rem,6vw,5rem)]">
+                Welcome{me ? `, ${me.displayName}` : ""}
+              </h1>
+              <p className="mt-3 text-sm text-fg-muted">
+                Identity verification:{" "}
+                <span className="font-medium text-fg">{me?.verification ?? "UNVERIFIED"}</span>
+              </p>
+            </div>
+            <Link className="editorial-button" href="/dashboard/new">Create escrow</Link>
           </div>
-          <Button asChild>
-            <Link href="/dashboard/new">Create escrow</Link>
-          </Button>
-        </div>
 
-        {caps && !caps.liveMoneyMovementEnabled && (
-          <div className="mt-6 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-fg-muted">
-            <strong className="font-semibold text-fg">Payments not yet configured.</strong>{" "}
-            You can create and agree escrow terms now. Funding, payouts and refunds are
-            disabled until an approved payment provider is set up.
-          </div>
-        )}
-
-        {error && (
-          <div role="alert" className="mt-6 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-            {error}
-          </div>
-        )}
-
-        {txs.length > 0 && (
-          <div className="mt-8 flex flex-wrap gap-2">
-            <FilterChip active={filter === ""} onClick={() => setFilter("")}>
-              All ({txs.length})
-            </FilterChip>
-            {states.map((s) => (
-              <FilterChip key={s} active={filter === s} onClick={() => setFilter(s)}>
-                {s.replace(/_/g, " ").toLowerCase()}
-              </FilterChip>
-            ))}
-          </div>
-        )}
-
-        <div className="mt-6">
-          {filtered.length === 0 ? (
-            <EmptyState hasAny={txs.length > 0} />
-          ) : (
-            <ul className="space-y-3">
-              {filtered.map((t) => (
-                <li key={t.id}>
-                  <Link
-                    href={`/dashboard/transactions/${t.id}`}
-                    className="flex items-center justify-between gap-4 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-primary/40"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{t.title}</p>
-                      <p className="mt-0.5 text-xs text-fg-muted">
-                        {t.reference} · you are the {t.role.toLowerCase()}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span className="hidden font-semibold tabular-nums sm:inline">
-                        {formatAmount(t.amountMinor, t.currency)}
-                      </span>
-                      <StateBadge state={t.state} />
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+          {caps && !caps.liveMoneyMovementEnabled && (
+            <div className="mt-6 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-fg-muted">
+              <strong className="font-semibold text-fg">Payments not yet configured.</strong>{" "}
+              You can create and agree escrow terms now. Funding, payouts and refunds are
+              disabled until an approved payment provider is set up.
+            </div>
           )}
-        </div>
-      </Container>
+
+          {error && (
+            <div role="alert" className="mt-6 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+              {error}
+            </div>
+          )}
+
+          <h2 className="mt-8 font-display text-2xl font-bold tracking-tight">Transactions</h2>
+          {txs.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <FilterChip active={filter === ""} onClick={() => setFilter("")}>
+                All ({txs.length})
+              </FilterChip>
+              {states.map((s) => (
+                <FilterChip key={s} active={filter === s} onClick={() => setFilter(s)}>
+                  {s.replace(/_/g, " ").toLowerCase()}
+                </FilterChip>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-6">
+            {filtered.length === 0 ? (
+              <EmptyState hasAny={txs.length > 0} />
+            ) : (
+              <ul className="space-y-3">
+                {filtered.map((t) => (
+                  <li key={t.id}>
+                    <Link
+                      href={`/dashboard/transactions/${t.id}`}
+                      className="flex items-center justify-between gap-4 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-primary/40"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{t.title}</p>
+                        <p className="mt-0.5 text-xs text-fg-muted">
+                          {t.reference} · you are the {t.role.toLowerCase()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="hidden font-semibold tabular-nums sm:inline">
+                          {formatAmount(t.amountMinor, t.currency)}
+                        </span>
+                        <StateBadge state={t.state} />
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </Container>
+      </main>
     </div>
   );
 }

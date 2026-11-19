@@ -23,19 +23,18 @@ export function PageHeader({
   subtitle?: string;
 }) {
   return (
-    <section className="border-b border-border bg-surface">
-      <Container className="py-16 md:py-20">
+    <section className="border-b border-border bg-surface-muted">
+      <Container className="py-14 sm:py-20 md:py-24">
         {category && (
-          <p className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-fg-muted">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
+          <p className="section-label mb-4">
             {category}
           </p>
         )}
-        <h1 className="max-w-3xl text-balance font-display text-4xl font-bold tracking-tight sm:text-5xl">
+        <h1 className="editorial-title max-w-5xl text-balance">
           {title}
         </h1>
         {subtitle && (
-          <p className="mt-4 max-w-2xl text-pretty text-lg text-fg-muted">{subtitle}</p>
+          <p className="mt-5 max-w-2xl text-pretty text-lg leading-relaxed text-fg-muted">{subtitle}</p>
         )}
       </Container>
     </section>

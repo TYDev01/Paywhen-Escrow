@@ -1,5 +1,18 @@
 {
-  "$comment": "Add images the owner supplies here. The hero carousel reads `hero` at runtime, so new images appear without a rebuild. Example slide: { \"src\": \"/assets/hero-1.jpg\", \"alt\": \"Describe the image\", \"title\": \"Optional overlay title\", \"subtitle\": \"Optional overlay subtitle\" }. While `hero` is empty, designed placeholder slides render.",
-  "hero": [],
+  "$comment": "Hero images in order: funded, delivery in review, payment released. Each image needs src and alt.",
+  "hero": [
+    {
+      "src": "/assets/deal-held.webp",
+      "alt": "A mint token enclosed inside a violet glass vault."
+    },
+    {
+      "src": "/assets/deal-review.webp",
+      "alt": "A mint token inside a violet glass vault with the lid raised."
+    },
+    {
+      "src": "/assets/deal-released.webp",
+      "alt": "A mint token suspended outside an open violet glass vault."
+    }
+  ],
   "images": []
 }

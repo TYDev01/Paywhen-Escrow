@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { motion } from "framer-motion";
+import { ShieldIcon } from "@/components/ui/brand";
 import { Container } from "@/components/ui/container";
 
 const steps = [
@@ -31,70 +31,53 @@ export function EscrowSteps() {
   const [active, setActive] = React.useState(0);
 
   return (
-    <section id="how" className="py-20">
+    <section id="how" aria-labelledby="how-title" className="scroll-mt-24 py-16 sm:py-24">
       <Container>
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="font-display text-3xl font-bold sm:text-4xl">
-            A clear path from handshake to payout
-          </h2>
-          <p className="mt-4 text-fg-muted">
-            Every escrow follows the same transparent steps. Tap through to see what
-            happens at each stage.
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="mb-3 text-sm font-semibold text-primary">How escrow works</p>
+            <h2 id="how-title" className="font-display text-4xl font-bold leading-[1.04] tracking-[-0.055em] sm:text-5xl">
+              From agreement to payout
+            </h2>
+          </div>
+          <p className="max-w-[33ch] leading-relaxed text-fg-muted">
+            Follow the five steps from setting the terms to releasing payment.
           </p>
         </div>
 
-        <div className="mt-12 grid gap-8 lg:grid-cols-[1fr_1.1fr]">
-          <ol className="flex flex-col gap-2" aria-label="Escrow process steps">
-            {steps.map((step, i) => {
-              const isActive = i === active;
-              return (
-                <li key={step.title}>
-                  <button
-                    type="button"
-                    onClick={() => setActive(i)}
-                    aria-current={isActive}
-                    className={`flex w-full items-start gap-4 rounded-lg border p-4 text-left transition-colors ${
-                      isActive
-                        ? "border-primary/40 bg-surface shadow-subtle"
-                        : "border-transparent hover:bg-surface-muted"
-                    }`}
-                  >
-                    <span
-                      className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-semibold ${
-                        isActive ? "bg-primary text-primary-fg" : "bg-surface-muted text-fg-muted"
-                      }`}
-                    >
-                      {i + 1}
-                    </span>
-                    <span className="font-medium">{step.title}</span>
-                  </button>
-                </li>
-              );
-            })}
+        <div className="mt-8 grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
+          <ol className="divide-y divide-primary/10 rounded-[27px] border border-primary/15 px-2 py-2 sm:px-3" aria-label="Escrow process steps">
+            {steps.map((step, index) => (
+              <li key={step.title} className="py-1">
+                <button
+                  type="button"
+                  onClick={() => setActive(index)}
+                  aria-current={active === index ? "step" : undefined}
+                  aria-controls="escrow-step-detail"
+                  className="group flex min-h-12 w-full items-center gap-3 rounded-[16px] px-3 py-2 text-left font-medium transition-colors hover:bg-primary/5 aria-[current=step]:bg-primary aria-[current=step]:text-white"
+                >
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-semibold tabular-nums text-primary group-aria-[current=step]:bg-accent group-aria-[current=step]:text-fg">
+                    {index + 1}
+                  </span>
+                  {step.title}
+                </button>
+              </li>
+            ))}
           </ol>
 
-          <div className="relative rounded-xl border border-border bg-surface p-8 shadow-card">
-            <motion.div
-              key={active}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <div className="inline-flex rounded-full bg-accent/50 px-3 py-1 text-xs font-semibold text-fg">
-                Step {active + 1} of {steps.length}
-              </div>
-              <h3 className="mt-4 font-display text-2xl font-bold">{steps[active]!.title}</h3>
-              <p className="mt-3 text-fg-muted">{steps[active]!.body}</p>
+          <div id="escrow-step-detail" aria-live="polite" className="flex min-h-[270px] flex-col rounded-[27px] bg-[#eae6ff] p-7 sm:p-9">
+            <div className="mb-5 flex items-center justify-between gap-3 text-primary">
+              <p className="text-sm font-semibold">Step {active + 1} of {steps.length}</p>
+              <ShieldIcon className="size-7" />
+            </div>
+            <h3 className="font-display text-3xl font-bold tracking-[-0.04em]">{steps[active]!.title}</h3>
+            <p className="mt-3 max-w-[48ch] leading-relaxed text-fg-muted">{steps[active]!.body}</p>
 
-              <div className="mt-8 h-2 overflow-hidden rounded-full bg-surface-muted">
-                <motion.div
-                  className="h-full rounded-full bg-primary"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${((active + 1) / steps.length) * 100}%` }}
-                  transition={{ duration: 0.4, ease: "easeOut" }}
-                />
-              </div>
-            </motion.div>
+            <div className="mt-auto flex gap-1.5 pt-8" aria-hidden="true">
+              {steps.map((step, index) => (
+                <span key={step.title} className={`h-1.5 flex-1 rounded-full ${index <= active ? "bg-primary" : "bg-primary/15"}`} />
+              ))}
+            </div>
           </div>
         </div>
       </Container>

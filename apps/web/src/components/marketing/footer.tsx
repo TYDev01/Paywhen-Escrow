@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Container } from "@/components/ui/container";
+import { BrandMark } from "@/components/ui/brand";
 
 const columns = [
   {
@@ -33,20 +34,14 @@ const columns = [
 
 export function Footer() {
   return (
-    <footer className="border-t border-border bg-surface">
-      <Container className="grid gap-10 py-14 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
-        <div>
-          <Link href="/" className="flex items-center gap-2 font-display text-lg font-bold">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-fg">
-              E
-            </span>
-            Escrow
+    <footer className="bg-[#17132d] text-white [&_a]:focus-visible:outline-accent">
+      <Container className="grid grid-cols-2 gap-x-6 gap-y-9 py-12 md:grid-cols-[1.55fr_1fr_1fr_1fr] md:py-16">
+        <div className="col-span-2 md:col-span-1">
+          <Link href="/" className="inline-flex items-center gap-2 text-accent" aria-label="Escrow homepage">
+            <BrandMark className="size-9" />
+            <span className="font-display text-2xl font-bold tracking-[-0.06em]">Escrow</span>
           </Link>
-          <p className="mt-4 max-w-xs text-sm text-fg-muted">
-            Payment held securely until both sides are satisfied. Buyer and seller
-            protection, built in.
-          </p>
-          <p className="mt-4 text-xs text-fg-muted">
+          <p className="mt-4 text-[0.8125rem] leading-relaxed text-white/75">
             This platform does not hold or safeguard customer funds until the required
             financial partner arrangements and regulatory approvals have been completed
             and verified.
@@ -54,13 +49,13 @@ export function Footer() {
         </div>
         {columns.map((col) => (
           <nav key={col.title} aria-label={col.title}>
-            <h3 className="text-sm font-semibold text-fg">{col.title}</h3>
+            <h3 className="text-sm font-semibold text-white">{col.title}</h3>
             <ul className="mt-4 space-y-2.5">
               {col.links.map((l) => (
                 <li key={l.href}>
                   <Link
                     href={l.href}
-                    className="text-sm text-fg-muted transition-colors hover:text-fg"
+                    className="text-sm text-white/70 transition-colors hover:text-accent"
                   >
                     {l.label}
                   </Link>
@@ -70,8 +65,8 @@ export function Footer() {
           </nav>
         ))}
       </Container>
-      <div className="border-t border-border">
-        <Container className="flex flex-col items-center justify-between gap-2 py-5 text-xs text-fg-muted sm:flex-row">
+      <div className="border-t border-white/15">
+        <Container className="flex flex-col items-center justify-between gap-2 py-5 text-[0.8125rem] leading-relaxed text-white/75 sm:flex-row">
           <p>© {new Date().getFullYear()} Escrow. All rights reserved.</p>
           <p>Legal content is provisional and requires professional review before launch.</p>
         </Container>

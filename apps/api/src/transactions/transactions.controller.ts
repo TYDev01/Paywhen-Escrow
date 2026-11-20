@@ -18,6 +18,14 @@ export class TransactionsController {
     return this.transactions.listForUser(user.id, state);
   }
 
+  // Declared before ":id" so "by-reference" is not captured as an id.
+  @Get("by-reference/:reference")
+  @RequirePermissions("transaction:read:own")
+  @ApiOperation({ summary: "Look up a transaction by its payment ID (reference)" })
+  byReference(@Param("reference") reference: string, @CurrentUser() user: AuthUser) {
+    return this.transactions.getByReferenceForUser(reference, user.id);
+  }
+
   @Get(":id")
   @RequirePermissions("transaction:read:own")
   @ApiOperation({ summary: "Transaction detail with state history" })

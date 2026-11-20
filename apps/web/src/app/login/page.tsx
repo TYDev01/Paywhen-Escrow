@@ -20,6 +20,10 @@ type FormValues = z.infer<typeof schema>;
 
 export default function LoginPage() {
   const router = useRouter();
+  const [passwordChanged, setPasswordChanged] = React.useState(false);
+  React.useEffect(() => {
+    setPasswordChanged(new URLSearchParams(window.location.search).get("passwordChanged") === "1");
+  }, []);
   const [serverError, setServerError] = React.useState<string | null>(null);
   const {
     register,
@@ -41,6 +45,11 @@ export default function LoginPage() {
 
   return (
     <AuthShell title="Welcome back" description="Log in to manage your transactions.">
+      {passwordChanged && (
+        <p role="status" className="mt-4 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm">
+          Password changed. Sign in with your new password.
+        </p>
+      )}
       {serverError && (
         <div role="alert" className="mt-4 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
           {serverError}

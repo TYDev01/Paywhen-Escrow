@@ -9,6 +9,7 @@ import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import { permissionsFor, type Role } from "@escrow/core";
 import { IS_PUBLIC_KEY } from "../decorators/public.decorator";
+import { PASSWORD_CHANGED_ACTION, passwordVersion } from "../../auth/password-version";
 import { PrismaService } from "../../prisma/prisma.service";
 
 @Injectable()
@@ -34,10 +35,11 @@ export class JwtAuthGuard implements CanActivate {
     }
     const token = header.slice("Bearer ".length);
 
-    let payload: { sub: string; email: string };
+    const secret = this.config.getOrThrow<string>("JWT_ACCESS_SECRET");
+    let payload: { sub: string; email: string; iat?: number; credential?: string };
     try {
       payload = await this.jwt.verifyAsync(token, {
-        secret: this.config.getOrThrow<string>("JWT_ACCESS_SECRET"),
+        secret,
       });
     } catch {
       throw new UnauthorizedException("Invalid or expired token");
@@ -50,6 +52,25 @@ export class JwtAuthGuard implements CanActivate {
     });
     if (!user || user.status === "DEACTIVATED") {
       throw new UnauthorizedException("Account unavailable");
+    }
+
+    if (payload.credential !== undefined) {
+      if (payload.credential !== passwordVersion(user.passwordHash, secret)) {
+        throw new UnauthorizedException("Credentials changed. Sign in again.");
+      }
+    } else {
+      // Tokens issued before credential binding stay valid only until a password change.
+      if (typeof payload.iat !== "number") throw new UnauthorizedException("Invalid token");
+      const change = await this.prisma.auditLog.findFirst({
+        where: {
+          entityType: "User",
+          entityId: user.id,
+          action: PASSWORD_CHANGED_ACTION,
+          createdAt: { gte: new Date(payload.iat * 1000) },
+        },
+        select: { id: true },
+      });
+      if (change) throw new UnauthorizedException("Credentials changed. Sign in again.");
     }
 
     const roles = user.roles.map((ur) => ur.role.name as Role);

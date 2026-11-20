@@ -1,6 +1,6 @@
 "use client";
 
-import { apiFetch } from "./api";
+import { ApiError, apiFetch } from "./api";
 
 const ACCESS_KEY = "escrow.accessToken";
 const REFRESH_KEY = "escrow.refreshToken";
@@ -10,6 +10,8 @@ export interface TokenPair {
   refreshToken: string;
   expiresIn: number;
 }
+
+let refreshAttempt: { previous: string; promise: Promise<TokenPair> } | undefined;
 
 export function saveTokens(tokens: TokenPair): void {
   localStorage.setItem(ACCESS_KEY, tokens.accessToken);
@@ -27,6 +29,7 @@ export function getRefreshToken(): string | null {
 }
 
 export function clearTokens(): void {
+  refreshAttempt = undefined;
   localStorage.removeItem(ACCESS_KEY);
   localStorage.removeItem(REFRESH_KEY);
 }
@@ -65,17 +68,30 @@ export async function logout(): Promise<void> {
 /** Authenticated fetch that transparently refreshes an expired access token once. */
 export async function authedFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const token = getAccessToken();
+  const refreshToken = getRefreshToken();
   try {
     return await apiFetch<T>(path, { ...opts, token });
   } catch (err) {
     const status = (err as { status?: number }).status;
-    const refreshToken = getRefreshToken();
     if (status === 401 && refreshToken) {
-      const tokens = await apiFetch<TokenPair>("/auth/refresh", {
-        method: "POST",
-        body: JSON.stringify({ refreshToken }),
-      });
-      saveTokens(tokens);
+      // Concurrent requests from this session share a single token rotation.
+      if (refreshAttempt?.previous !== refreshToken) {
+        if (getRefreshToken() !== refreshToken) throw err;
+        const promise = apiFetch<TokenPair>("/auth/refresh", {
+          method: "POST",
+          body: JSON.stringify({ refreshToken }),
+        }).then((tokens) => {
+          if (getRefreshToken() !== refreshToken) throw new ApiError(401, "Session changed.");
+          saveTokens(tokens);
+          return tokens;
+        }).catch((refreshError: unknown) => {
+          if (refreshAttempt?.previous === refreshToken) refreshAttempt = undefined;
+          throw refreshError;
+        });
+        refreshAttempt = { previous: refreshToken, promise };
+      }
+      const tokens = await refreshAttempt.promise;
+      if (getRefreshToken() !== tokens.refreshToken) throw err;
       return apiFetch<T>(path, { ...opts, token: tokens.accessToken });
     }
     throw err;

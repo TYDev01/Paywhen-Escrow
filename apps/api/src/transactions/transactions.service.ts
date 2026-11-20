@@ -35,6 +35,8 @@ export class TransactionsService {
       amountMinor: t.agreement.amountMinor.toString(),
       currency: t.agreement.currency,
       role: t.agreement.buyerId === userId ? "BUYER" : "SELLER",
+      payoutType: t.agreement.payoutType,
+      hasBuyer: t.agreement.buyerId != null,
       updatedAt: t.updatedAt,
     }));
   }
@@ -42,7 +44,10 @@ export class TransactionsService {
   private async loadAuthorized(id: string, userId: string) {
     const tx = await this.prisma.transaction.findUnique({
       where: { id },
-      include: { agreement: true, stateHistory: { orderBy: { createdAt: "asc" } } },
+      include: {
+        agreement: { include: { milestones: { orderBy: { order: "asc" } } } },
+        stateHistory: { orderBy: { createdAt: "asc" } },
+      },
     });
     if (!tx) throw new NotFoundException("Transaction not found");
     const isParty = tx.agreement.buyerId === userId || tx.agreement.sellerId === userId;
@@ -52,6 +57,40 @@ export class TransactionsService {
 
   async getForUser(id: string, userId: string) {
     return this.loadAuthorized(id, userId);
+  }
+
+  /**
+   * Look up a transaction by its public reference ("payment ID"). Visible to a
+   * party, or to anyone when the escrow is open (no buyer yet) so they can claim it.
+   */
+  async getByReferenceForUser(reference: string, userId: string) {
+    const tx = await this.prisma.transaction.findUnique({
+      where: { reference: reference.trim() },
+      include: { agreement: { include: { milestones: { orderBy: { order: "asc" } } } } },
+    });
+    if (!tx) throw new NotFoundException("No escrow found for that payment ID");
+    const isSeller = tx.agreement.sellerId === userId;
+    const isBuyer = tx.agreement.buyerId === userId;
+    const claimable = tx.agreement.buyerId == null && !isSeller;
+    if (!isSeller && !isBuyer && !claimable) {
+      throw new ForbiddenException("This payment ID isn’t linked to your account");
+    }
+    return {
+      id: tx.id,
+      reference: tx.reference,
+      state: tx.state,
+      title: tx.agreement.title,
+      description: tx.agreement.description,
+      amountMinor: tx.agreement.amountMinor.toString(),
+      currency: tx.agreement.currency,
+      role: isBuyer || claimable ? "BUYER" : "SELLER",
+      payoutType: tx.agreement.payoutType,
+      claimable,
+      milestones: tx.agreement.milestones.map((m) => ({
+        id: m.id, order: m.order, title: m.title, amountMinor: m.amountMinor.toString(), status: m.status,
+      })),
+      updatedAt: tx.updatedAt,
+    };
   }
 
   /**

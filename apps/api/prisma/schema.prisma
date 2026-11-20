@@ -29,6 +29,7 @@ model User {
   deactivatedAt  DateTime?
 
   profile            Profile?
+  profileAvatar      ProfileAvatar?
   roles              UserRole[]
   sessions           Session[]
   verifications      IdentityVerification[]
@@ -39,6 +40,8 @@ model User {
   auditLogs          AuditLog[]        @relation("ActorAudit")
   disputeMessages    DisputeMessage[]
   txMessages         TransactionMessage[]
+  supportTickets     SupportTicket[]
+  supportMessages    SupportTicketMessage[]
 
   @@index([status])
 }
@@ -59,6 +62,13 @@ model Profile {
   avatarKey   String?  // object-storage key, not a public URL
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model ProfileAvatar {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content   Bytes
+  updatedAt DateTime @updatedAt
 }
 
 model Role {
@@ -111,7 +121,30 @@ model IdentityVerification {
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
+  document     IdentityDocument?
+
   @@index([userId, status])
+}
+
+model IdentityDocument {
+  verificationId String               @id
+  verification   IdentityVerification @relation(fields: [verificationId], references: [id], onDelete: Cascade)
+  type           IdentityDocumentType
+  // Front side of the document.
+  mimeType       String
+  size           Int
+  encrypted      Bytes
+  // Back side of the document (required — both sides are submitted together).
+  backMimeType   String
+  backSize       Int
+  encryptedBack  Bytes
+  uploadedAt     DateTime             @default(now())
+}
+
+enum IdentityDocumentType {
+  PASSPORT
+  NATIONAL_ID
+  DRIVERS_LICENSE
 }
 
 enum VerificationLevel {
@@ -140,9 +173,11 @@ model EscrowAgreement {
   title          String
   description    String
   category       String
-  buyerId        String
+  // Open escrow: a seller can create an escrow before a buyer is known. The
+  // buyer attaches by paying the agreement's reference ("payment ID").
+  buyerId        String?
   sellerId       String
-  buyer          User     @relation("BuyerAgreements", fields: [buyerId], references: [id])
+  buyer          User?    @relation("BuyerAgreements", fields: [buyerId], references: [id])
   seller         User     @relation("SellerAgreements", fields: [sellerId], references: [id])
 
   amountMinor    BigInt
@@ -150,6 +185,8 @@ model EscrowAgreement {
   feePayer       String   // BUYER | SELLER | SPLIT
   feePercentBps  Int
   feeFixedMinor  BigInt
+  // SINGLE (one payment) | MILESTONES (released in stages)
+  payoutType     String   @default("SINGLE")
 
   createdById    String
   createdAt      DateTime @default(now())
@@ -159,9 +196,49 @@ model EscrowAgreement {
   currentVersion   AgreementVersion? @relation("CurrentVersion", fields: [currentVersionId], references: [id])
   versions         AgreementVersion[] @relation("AgreementVersions")
   transaction      Transaction?
+  milestones       Milestone[]
+  images           AgreementImage[]
 
   @@index([buyerId])
   @@index([sellerId])
+}
+
+// A stage of a milestone-based escrow. Amounts sum to the agreement total.
+model Milestone {
+  id          String   @id @default(uuid())
+  agreementId String
+  agreement   EscrowAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  order       Int
+  title       String
+  amountMinor BigInt
+  status      MilestoneStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([agreementId, order])
+}
+
+enum MilestoneStatus {
+  PENDING
+  DELIVERED
+  RELEASED
+  CANCELLED
+}
+
+// Metadata for a supporting image on an escrow. `storageKey` is null until an
+// object-storage backend is configured; the bytes themselves are not persisted.
+model AgreementImage {
+  id           String   @id @default(uuid())
+  agreementId  String
+  agreement    EscrowAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  fileName     String
+  contentType  String
+  sizeBytes    Int
+  storageKey   String?
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  @@index([agreementId])
 }
 
 // Immutable snapshot of accepted terms. A material change creates a new version
@@ -506,6 +583,48 @@ model TransactionMessage {
   createdAt     DateTime @default(now())
 
   @@index([transactionId, createdAt])
+}
+
+// --------------------------------------------------------------------------
+// Support tickets
+// --------------------------------------------------------------------------
+
+model SupportTicket {
+  id         String   @id @default(uuid())
+  // Public, human-readable reference shown to the user, e.g. "TCK-7F3K9Q2M".
+  reference  String   @unique
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject    String
+  category   String
+  status     SupportTicketStatus @default(OPEN)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  messages   SupportTicketMessage[]
+
+  @@index([userId, status])
+}
+
+enum SupportTicketStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+model SupportTicketMessage {
+  id          String   @id @default(uuid())
+  ticketId    String
+  ticket      SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+  body        String
+  // True when written by a support agent rather than the ticket owner.
+  fromSupport Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([ticketId, createdAt])
 }
 
 // --------------------------------------------------------------------------

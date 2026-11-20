@@ -7,7 +7,8 @@ import { authedFetch, getAccessToken } from "@/lib/auth-store";
 import { ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
-import { StateBadge } from "@/components/dashboard/state-badge";
+import { StateBadge, stateLabel } from "@/components/dashboard/state-badge";
+import { displayAmount } from "@/components/dashboard/transactions";
 
 interface StateChange {
   id: string;
@@ -15,6 +16,13 @@ interface StateChange {
   toState: string;
   reason: string | null;
   createdAt: string;
+}
+interface Milestone {
+  id: string;
+  order: number;
+  title: string;
+  amountMinor: string;
+  status: "PENDING" | "DELIVERED" | "RELEASED" | "CANCELLED";
 }
 interface TxDetail {
   id: string;
@@ -28,9 +36,18 @@ interface TxDetail {
     amountMinor: string;
     currency: string;
     feePayer: string;
+    payoutType: "SINGLE" | "MILESTONES";
+    milestones: Milestone[];
   };
   stateHistory: StateChange[];
 }
+
+const milestoneTone: Record<Milestone["status"], string> = {
+  PENDING: "bg-warning/15 text-warning",
+  DELIVERED: "bg-primary/15 text-primary",
+  RELEASED: "bg-success/15 text-success",
+  CANCELLED: "bg-surface-muted text-fg-muted",
+};
 
 export default function TransactionDetailPage() {
   const params = useParams<{ id: string }>();
@@ -64,6 +81,19 @@ export default function TransactionDetailPage() {
       await load();
     } catch (err) {
       setNotice(err instanceof ApiError ? err.message : "Could not accept.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const advanceMilestone = async (id: string) => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      await authedFetch(`/milestones/${id}/advance`, { method: "POST" });
+      await load();
+    } catch (err) {
+      setNotice(err instanceof ApiError ? err.message : "Could not update the milestone.");
     } finally {
       setBusy(false);
     }
@@ -104,23 +134,23 @@ export default function TransactionDetailPage() {
       <Container className="py-20">
         <p className="text-fg-muted">{notice ?? "Transaction not found."}</p>
         <Button asChild variant="outline" className="mt-4">
-          <Link href="/dashboard">Back to dashboard</Link>
+          <Link href="/dashboard/transactions">Back to transaction history</Link>
         </Button>
       </Container>
     );
   }
 
-  const amount = `${tx.agreement.currency} ${(BigInt(tx.agreement.amountMinor) / 100n).toString()}.${(BigInt(tx.agreement.amountMinor) % 100n).toString().padStart(2, "0")}`;
+  const amount = displayAmount(tx.agreement.amountMinor, tx.agreement.currency);
 
   return (
-    <Container className="max-w-3xl py-10">
-      <Link href="/dashboard" className="text-sm text-fg-muted hover:text-fg">
-        ← Back to dashboard
+    <Container className="workspace-content max-w-4xl">
+      <Link href="/dashboard/transactions" className="workspace-text-link">
+        Back to transaction history
       </Link>
 
       <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-bold">{tx.agreement.title}</h1>
+          <h1 className="break-words font-display text-3xl font-bold tracking-tight sm:text-4xl">{tx.agreement.title}</h1>
           <p className="mt-1 text-sm text-fg-muted">{tx.reference}</p>
         </div>
         <StateBadge state={tx.state} />
@@ -156,14 +186,40 @@ export default function TransactionDetailPage() {
         )}
       </div>
 
+      {tx.agreement.payoutType === "MILESTONES" && tx.agreement.milestones.length > 0 && (
+        <section className="mt-8">
+          <h2 className="font-display text-xl font-bold">Milestones</h2>
+          <p className="mt-1 text-sm text-fg-muted">The seller marks each stage delivered; the buyer releases it. (No money moves until a payment provider is configured.)</p>
+          <ol className="mt-4 space-y-3">
+            {tx.agreement.milestones.map((m, i) => (
+              <li key={m.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4">
+                <div className="min-w-0">
+                  <p className="font-semibold">{i + 1}. {m.title}</p>
+                  <p className="text-sm tabular-nums text-fg-muted">{displayAmount(m.amountMinor, tx.agreement.currency)}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${milestoneTone[m.status]}`}>{m.status.toLowerCase()}</span>
+                  {m.status === "PENDING" && (
+                    <Button size="sm" variant="outline" onClick={() => advanceMilestone(m.id)} disabled={busy}>Mark delivered</Button>
+                  )}
+                  {m.status === "DELIVERED" && (
+                    <Button size="sm" onClick={() => advanceMilestone(m.id)} disabled={busy}>Release</Button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
       <h2 className="mt-10 font-display text-xl font-bold">Activity history</h2>
       <ol className="mt-4 space-y-4 border-l border-border pl-5">
         {tx.stateHistory.map((h) => (
           <li key={h.id} className="relative">
-            <span className="absolute -left-[22px] top-1 h-3 w-3 rounded-full border-2 border-primary bg-bg" />
+            <span aria-hidden="true" className="absolute -left-[22px] top-1 h-3 w-3 rounded-full border-2 border-primary bg-bg" />
             <p className="text-sm font-medium">
-              {h.fromState ? `${h.fromState.replace(/_/g, " ")} → ` : ""}
-              {h.toState.replace(/_/g, " ")}
+              {h.fromState ? `${stateLabel(h.fromState)} → ` : ""}
+              {stateLabel(h.toState)}
             </p>
             {h.reason && <p className="text-sm text-fg-muted">{h.reason}</p>}
             <p className="mt-0.5 text-xs text-fg-muted">

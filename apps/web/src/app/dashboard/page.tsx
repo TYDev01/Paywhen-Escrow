@@ -1,229 +1,108 @@
 "use client";
 
-import * as React from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { authedFetch, getAccessToken, logout } from "@/lib/auth-store";
 import { getPaymentCapabilities, type PaymentCapabilities } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Container } from "@/components/ui/container";
-import { Brand } from "@/components/ui/brand";
-import { StateBadge } from "@/components/dashboard/state-badge";
+import { ShieldIcon } from "@/components/ui/brand";
+import { useWorkspaceAccount } from "@/components/dashboard/workspace-shell";
+import { WorkspaceIcon, type WorkspaceIconName } from "@/components/dashboard/workspace-icon";
+import { stateLabel } from "@/components/dashboard/state-badge";
+import {
+  EmptyTransactions,
+  TransactionFeedback,
+  TransactionTable,
+  transactionCounts,
+  useTransactions,
+} from "@/components/dashboard/transactions";
 
-interface Me {
-  displayName: string;
-  email: string;
-  roles: string[];
-  verification: string;
-}
-interface TxSummary {
-  id: string;
-  reference: string;
-  state: string;
-  title: string;
-  amountMinor: string;
-  currency: string;
-  role: string;
-  updatedAt: string;
-}
-
-function formatAmount(minor: string, currency: string): string {
-  const n = BigInt(minor);
-  const whole = n / 100n;
-  const frac = (n % 100n).toString().padStart(2, "0");
-  return `${currency} ${whole.toString()}.${frac}`;
-}
+const metrics: { key: "total" | "open" | "completed"; label: string; icon: WorkspaceIconName }[] = [
+  { key: "total", label: "Total transactions", icon: "history" },
+  { key: "open", label: "Open escrows", icon: "open" },
+  { key: "completed", label: "Completed escrows", icon: "check" },
+];
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const [loading, setLoading] = React.useState(true);
-  const [me, setMe] = React.useState<Me | null>(null);
-  const [txs, setTxs] = React.useState<TxSummary[]>([]);
-  const [caps, setCaps] = React.useState<PaymentCapabilities | null>(null);
-  const [filter, setFilter] = React.useState<string>("");
-  const [error, setError] = React.useState<string | null>(null);
+  const account = useWorkspaceAccount();
+  const { data, retry } = useTransactions();
+  const [payments, setPayments] = useState<PaymentCapabilities | null>();
+  const counts = data.status === "ready" ? transactionCounts(data.records) : null;
 
-  React.useEffect(() => {
-    if (!getAccessToken()) {
-      router.replace("/login");
-      return;
-    }
-    (async () => {
-      try {
-        const [meRes, txRes, capsRes] = await Promise.all([
-          authedFetch<Me>("/me"),
-          authedFetch<TxSummary[]>("/transactions"),
-          getPaymentCapabilities().catch(() => null),
-        ]);
-        setMe(meRes);
-        setTxs(txRes);
-        setCaps(capsRes);
-      } catch {
-        setError("Your session has expired. Please log in again.");
-        setTimeout(() => router.replace("/login"), 1200);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [router]);
+  useEffect(() => {
+    let active = true;
+    getPaymentCapabilities()
+      .then((value) => { if (active) setPayments(value); })
+      .catch(() => { if (active) setPayments(null); });
+    return () => { active = false; };
+  }, []);
 
-  const filtered = filter ? txs.filter((t) => t.state === filter) : txs;
-  const states = Array.from(new Set(txs.map((t) => t.state)));
-
-  if (loading) {
-    return (
-      <Container className="py-20">
-        <div className="h-8 w-48 animate-pulse rounded bg-surface-muted" />
-        <div className="mt-6 space-y-3">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-20 animate-pulse rounded-lg bg-surface-muted" />
-          ))}
+  return (
+    <div className="workspace-content">
+      <section className="workspace-hero" aria-labelledby="workspace-title">
+        <div>
+          <h1 id="workspace-title">Welcome back{account ? `, ${account.displayName.trim().split(/\s+/)[0]}` : ""}</h1>
+          <p>Track your escrow agreements and see where each deal stands.</p>
         </div>
-      </Container>
-    );
-  }
-
-  return (
-    <div className="min-h-screen">
-      <header className="border-b border-primary/15 bg-bg">
-        <Container className="flex h-16 items-center justify-between">
-          <Brand />
-          <div className="flex items-center gap-3">
-            <span className="hidden text-sm text-fg-muted sm:inline">{me?.email}</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={async () => {
-                await logout();
-                router.replace("/login");
-              }}
-            >
-              Log out
-            </Button>
-          </div>
-        </Container>
-      </header>
-
-      <main id="main">
-        <Container className="py-10">
-          <div className="flex flex-wrap items-end justify-between gap-5 border-b border-border pb-8 sm:pb-10">
-            <div className="min-w-0">
-              <p className="section-label">Workspace</p>
-              <h1 className="editorial-title mt-2 break-words !text-[clamp(2.5rem,6vw,5rem)]">
-                Welcome{me ? `, ${me.displayName}` : ""}
-              </h1>
-              <p className="mt-3 text-sm text-fg-muted">
-                Identity verification:{" "}
-                <span className="font-medium text-fg">{me?.verification ?? "UNVERIFIED"}</span>
-              </p>
-            </div>
-            <Link className="editorial-button" href="/dashboard/new">Create escrow</Link>
-          </div>
-
-          {caps && !caps.liveMoneyMovementEnabled && (
-            <div className="mt-6 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-fg-muted">
-              <strong className="font-semibold text-fg">Payments not yet configured.</strong>{" "}
-              You can create and agree escrow terms now. Funding, payouts and refunds are
-              disabled until an approved payment provider is set up.
-            </div>
-          )}
-
-          {error && (
-            <div role="alert" className="mt-6 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-              {error}
-            </div>
-          )}
-
-          <h2 className="mt-8 font-display text-2xl font-bold tracking-tight">Transactions</h2>
-          {txs.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              <FilterChip active={filter === ""} onClick={() => setFilter("")}>
-                All ({txs.length})
-              </FilterChip>
-              {states.map((s) => (
-                <FilterChip key={s} active={filter === s} onClick={() => setFilter(s)}>
-                  {s.replace(/_/g, " ").toLowerCase()}
-                </FilterChip>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-6">
-            {filtered.length === 0 ? (
-              <EmptyState hasAny={txs.length > 0} />
-            ) : (
-              <ul className="space-y-3">
-                {filtered.map((t) => (
-                  <li key={t.id}>
-                    <Link
-                      href={`/dashboard/transactions/${t.id}`}
-                      className="flex items-center justify-between gap-4 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-primary/40"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{t.title}</p>
-                        <p className="mt-0.5 text-xs text-fg-muted">
-                          {t.reference} · you are the {t.role.toLowerCase()}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <span className="hidden font-semibold tabular-nums sm:inline">
-                          {formatAmount(t.amountMinor, t.currency)}
-                        </span>
-                        <StateBadge state={t.state} />
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </Container>
-      </main>
-    </div>
-  );
-}
-
-function FilterChip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
-        active ? "border-primary bg-primary text-primary-fg" : "border-border bg-surface text-fg-muted hover:text-fg"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function EmptyState({ hasAny }: { hasAny: boolean }) {
-  return (
-    <div className="rounded-xl border border-dashed border-border bg-surface/50 px-6 py-16 text-center">
-      <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full bg-primary/10 text-xl text-primary" aria-hidden>
-        ✦
-      </div>
-      <h2 className="font-display text-lg font-bold">
-        {hasAny ? "No transactions match this filter" : "You have no transactions yet"}
-      </h2>
-      <p className="mx-auto mt-2 max-w-sm text-sm text-fg-muted">
-        {hasAny
-          ? "Try a different status filter."
-          : "Create your first escrow agreement to get started."}
-      </p>
-      {!hasAny && (
-        <Button asChild className="mt-6">
-          <Link href="/dashboard/new">Create your first escrow</Link>
+        <Button asChild variant="accent" className="relative shrink-0">
+          <Link href="/dashboard/new"><WorkspaceIcon name="plus" className="size-4" /> Create escrow</Link>
         </Button>
-      )}
+      </section>
+
+      <dl className="workspace-metrics" aria-label="Transaction summary">
+        {metrics.map(({ key, label, icon }) => (
+          <div key={key} className="workspace-panel workspace-metric" data-tone={key}>
+            <div>
+              <dt>{label}</dt>
+              <dd>{counts?.[key] ?? "—"}</dd>
+            </div>
+            <span className="workspace-tile-icon"><WorkspaceIcon name={icon} /></span>
+          </div>
+        ))}
+      </dl>
+
+      <div className="workspace-overview-grid">
+        <section className="workspace-panel min-w-0" aria-labelledby="recent-title">
+          <div className="workspace-panel-heading">
+            <h2 id="recent-title">Recent transactions</h2>
+            <Link className="workspace-text-link" href="/dashboard/transactions">
+              View history <WorkspaceIcon name="arrow" className="size-4" />
+            </Link>
+          </div>
+          {data.status === "ready" ? (
+            data.records.length ? <TransactionTable records={data.records.slice(0, 5)} /> : <EmptyTransactions />
+          ) : <TransactionFeedback status={data.status} onRetry={retry} />}
+        </section>
+
+        <div className="workspace-side-panels">
+          <section className="workspace-panel workspace-status-panel" aria-labelledby="payment-title">
+            <span className="workspace-tile-icon"><ShieldIcon className="size-5" /></span>
+            <h2 id="payment-title">Payment status</h2>
+            {payments ? (
+              <>
+                <p className="workspace-status-label" data-enabled={payments.liveMoneyMovementEnabled}>
+                  {payments.liveMoneyMovementEnabled ? "Live payments enabled" : "Payments unavailable"}
+                </p>
+                <p>{payments.liveMoneyMovementEnabled
+                  ? `Provider: ${payments.provider}`
+                  : "You can agree on escrow terms. Funding, payouts, and refunds are disabled."}</p>
+              </>
+            ) : (
+              <p>{payments === null ? "Payment status couldn’t be confirmed." : "Checking payment status…"}</p>
+            )}
+          </section>
+          {account && (
+            <section className="workspace-panel workspace-status-panel" aria-labelledby="account-title">
+              <span className="workspace-tile-icon"><WorkspaceIcon name="account" /></span>
+              <h2 id="account-title">Account status</h2>
+              <dl>
+                <div><dt>Identity</dt><dd>{account.verification === "PENDING" ? "Requested" : stateLabel(account.verification)}</dd></div>
+                <div><dt>Email</dt><dd>{account.emailVerified ? "Verified" : "Unverified"}</dd></div>
+              </dl>
+              <Link href="/dashboard/kyc" className="workspace-text-link">View identity verification</Link>
+            </section>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -11,6 +11,9 @@ import { AuthModule } from "./auth/auth.module";
 import { UsersModule } from "./users/users.module";
 import { AgreementsModule } from "./agreements/agreements.module";
 import { TransactionsModule } from "./transactions/transactions.module";
+import { DisputesModule } from "./disputes/disputes.module";
+import { MilestonesModule } from "./milestones/milestones.module";
+import { SupportModule } from "./support/support.module";
 import { PaymentsModule } from "./payments/payments.module";
 import { LedgerModule } from "./ledger/ledger.module";
 import { HealthModule } from "./health/health.module";
@@ -28,6 +31,9 @@ import { HealthModule } from "./health/health.module";
     UsersModule,
     AgreementsModule,
     TransactionsModule,
+    DisputesModule,
+    MilestonesModule,
+    SupportModule,
     PaymentsModule,
     LedgerModule,
     HealthModule,

@@ -22,13 +22,16 @@ export interface RequestOptions extends RequestInit {
 
 export async function apiFetch<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const { token, headers, ...rest } = opts;
+  const requestHeaders = new Headers(headers);
+  if (!requestHeaders.has("Content-Type") && !(rest.body instanceof FormData)) {
+    requestHeaders.set("Content-Type", "application/json");
+  }
+  if (token && !requestHeaders.has("Authorization")) {
+    requestHeaders.set("Authorization", `Bearer ${token}`);
+  }
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...rest,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...headers,
-    },
+    headers: requestHeaders,
     cache: "no-store",
   });
 

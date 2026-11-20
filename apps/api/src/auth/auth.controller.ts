@@ -1,8 +1,10 @@
 import { Body, Controller, Post, Req, HttpCode } from "@nestjs/common";
-import { ApiTags, ApiOperation } from "@nestjs/swagger";
+import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger";
+import { Throttle } from "@nestjs/throttler";
 import type { Request } from "express";
 import { AuthService } from "./auth.service";
-import { RegisterDto, LoginDto, RefreshDto } from "./dto";
+import { RegisterDto, LoginDto, RefreshDto, ChangePasswordDto } from "./dto";
+import { CurrentUser, type AuthUser } from "../common/decorators/current-user.decorator";
 import { Public } from "../common/decorators/public.decorator";
 
 @ApiTags("auth")
@@ -38,6 +40,15 @@ export class AuthController {
   @ApiOperation({ summary: "Rotate refresh token for a new access token" })
   refresh(@Body() dto: RefreshDto, @Req() req: Request) {
     return this.auth.refresh(dto.refreshToken, this.meta(req));
+  }
+
+  @Post("change-password")
+  @HttpCode(204)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Change the current user's password and revoke existing sessions" })
+  async changePassword(@CurrentUser() user: AuthUser, @Body() dto: ChangePasswordDto) {
+    await this.auth.changePassword(user.id, dto);
   }
 
   @Public()

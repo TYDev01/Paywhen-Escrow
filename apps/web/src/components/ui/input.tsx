@@ -18,11 +18,13 @@ Input.displayName = "Input";
 export function Field({
   label,
   htmlFor,
+  description,
   error,
   children,
 }: {
   label: string;
   htmlFor: string;
+  description?: string;
   error?: string;
   children: React.ReactNode;
 }) {
@@ -32,8 +34,13 @@ export function Field({
         {label}
       </label>
       {children}
+      {description && (
+        <p id={`${htmlFor}-description`} className="text-sm text-fg-muted">
+          {description}
+        </p>
+      )}
       {error && (
-        <p role="alert" className="text-sm text-danger">
+        <p id={`${htmlFor}-error`} role="alert" className="text-sm text-danger">
           {error}
         </p>
       )}

@@ -24,4 +24,11 @@ export class AgreementsController {
   accept(@Param("id") id: string, @CurrentUser() user: AuthUser) {
     return this.agreements.accept(id, user);
   }
+
+  @Post("claim/:reference")
+  @RequirePermissions("agreement:accept")
+  @ApiOperation({ summary: "Attach the caller as buyer to an open escrow by its payment ID" })
+  claim(@Param("reference") reference: string, @CurrentUser() user: AuthUser) {
+    return this.agreements.claim(reference, user);
+  }
 }

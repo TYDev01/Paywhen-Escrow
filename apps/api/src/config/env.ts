@@ -25,6 +25,10 @@ const schema = z
     STRIPE_WEBHOOK_SECRET: z.string().optional(),
 
     KYC_PROVIDER: z.string().default("none"),
+    KYC_DOCUMENT_KEY: z.preprocess(
+      (value) => value === "" ? undefined : value,
+      z.string().regex(/^[A-Za-z0-9+/]{43}=$/, "Use a base64-encoded 32-byte key").optional(),
+    ),
     MAIL_TRANSPORT: z.enum(["log", "smtp"]).default("log"),
     SMTP_URL: z.string().optional(),
     MAIL_FROM: z.string().default("Escrow <no-reply@example.com>"),
